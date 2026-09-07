@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오늘의 기록</title>
+<style>
+  :root{
+    --bg:#f6f4ef; --panel:#fffdf8; --line:#e5e0d5; --text:#2f2b26;
+    --muted:#8a8175; --accent:#c8622f; --accent-soft:#f3e3d9; --shadow:0 1px 3px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#1b1a18; --panel:#252320; --line:#3a3733; --text:#ece7df;
+      --muted:#9b948a; --accent:#e0824c; --accent-soft:#3a2a20;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+    -webkit-text-size-adjust:100%}
+  header{padding:20px 24px;border-bottom:1px solid var(--line);background:var(--panel);
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  header h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.02em}
+  header .count{color:var(--muted);font-size:13px}
+  header .spacer{flex:1}
+  button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel);color:var(--text);padding:9px 14px;transition:.15s}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button.primary:hover{filter:brightness(1.08)}
+  button.danger:hover{border-color:#c23b3b;color:#c23b3b}
+
+  .layout{display:grid;grid-template-columns:300px 1fr;gap:0;height:calc(100vh - 65px)}
+  @media (max-width:760px){
+    .layout{grid-template-columns:1fr;height:auto}
+    aside{border-right:none!important;border-bottom:1px solid var(--line);max-height:40vh}
+  }
+
+  aside{border-right:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:14px}
+  .search{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;
+    background:var(--bg);color:var(--text);font:inherit;margin-bottom:12px}
+  .search:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+
+  .item{padding:12px;border-radius:10px;cursor:pointer;margin-bottom:6px;border:1px solid transparent}
+  .item:hover{background:var(--bg)}
+  .item.active{background:var(--accent-soft);border-color:var(--accent)}
+  @media (prefers-color-scheme: dark){ .item.active{background:#3a2a20;border-color:var(--accent)} }
+  .item .t{font-weight:600;font-size:14px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .d{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:28px 8px;line-height:1.7}
+
+  main{padding:24px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+  .meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input[type=date],select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+    background:var(--panel);color:var(--text);font:inherit}
+  #title{width:100%;font-size:22px;font-weight:700;border:none;background:transparent;
+    color:var(--text);font-family:inherit;padding:4px 0;letter-spacing:-.02em}
+  #title:focus{outline:none}
+  #title::placeholder,#body::placeholder{color:var(--muted)}
+  #body{flex:1;min-height:320px;width:100%;resize:vertical;border:1px solid var(--line);
+    border-radius:12px;padding:16px;background:var(--panel);color:var(--text);
+    font:inherit;font-size:15px;line-height:1.8}
+  #body:focus,#title:focus{outline:none}
+  #body:focus{border-color:var(--accent)}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .status{color:var(--muted);font-size:13px;margin-left:auto}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📔 오늘의 기록</h1>
+  <span class="count" id="count"></span>
+  <span class="spacer"></span>
+  <button class="primary" id="new">+ 새 글쓰기</button>
+</header>
+
+<div class="layout">
+  <aside>
+    <input class="search" id="search" type="search" placeholder="검색 (제목·내용)">
+    <div id="list"></div>
+  </aside>
+
+  <main>
+    <div class="meta">
+      <input type="date" id="date">
+      <select id="mood">
+        <option value="">기분 선택</option>
+        <option value="😊">😊 좋음</option>
+        <option value="🙂">🙂 보통</option>
+        <option value="😔">😔 우울</option>
+        <option value="😡">😡 화남</option>
+        <option value="🥱">🥱 피곤</option>
+        <option value="🥳">🥳 신남</option>
+      </select>
+    </div>
+
+    <input id="title" placeholder="제목을 입력하세요">
+    <textarea id="body" placeholder="오늘 있었던 일을 자유롭게 적어보세요..."></textarea>
+
+    <div class="bar">
+      <button class="primary" id="save">저장</button>
+      <button class="danger" id="del">삭제</button>
+      <span class="status" id="status"></span>
+    </div>
+  </main>
+</div>
+
+<script>
+const KEY = 'today-diary-entries';
+const $ = id => document.getElementById(id);
+
+let entries = load();
+let currentId = null;
+let saveTimer = null;
+
+function load(){
+  try { return JSON.parse(localStorage.getItem(KEY)) || []; }
+  catch(e){ return []; }
+}
+function persist(){
+  try { localStorage.setItem(KEY, JSON.stringify(entries)); }
+  catch(e){ setStatus('저장 공간이 가득 찼어요'); }
+}
+function todayStr(){
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+function setStatus(msg){
+  $('status').textContent = msg;
+  if(msg) setTimeout(()=>{ if($('status').textContent===msg) $('status').textContent=''; }, 2500);
+}
+
+function newEntry(){
+  currentId = null;
+  $('date').value = todayStr();
+  $('mood').value = '';
+  $('title').value = '';
+  $('body').value = '';
+  render();
+  $('title').focus();
+}
+
+function open(id){
+  const e = entries.find(x => x.id === id);
+  if(!e) return;
+  currentId = id;
+  $('date').value = e.date;
+  $('mood').value = e.mood || '';
+  $('title').value = e.title;
+  $('body').value = e.body;
+  render();
+}
+
+function save(silent){
+  const title = $('title').value.trim();
+  const body  = $('body').value.trim();
+  if(!title && !body){ if(!silent) setStatus('내용을 먼저 입력해주세요'); return; }
+
+  if(currentId){
+    const e = entries.find(x => x.id === currentId);
+    Object.assign(e, {
+      date: $('date').value || todayStr(),
+      mood: $('mood').value,
+      title: title || '(제목 없음)',
+      body, updated: Date.now()
+    });
+  } else {
+    currentId = String(Date.now());
+    entries.push({
+      id: currentId,
+      date: $('date').value || todayStr(),
+      mood: $('mood').value,
+      title: title || '(제목 없음)',
+      body, updated: Date.now()
+    });
+  }
+  persist();
+  render();
+  setStatus(silent ? '자동 저장됨' : '저장했어요 ✓');
+}
+
+function remove(){
+  if(!currentId){ newEntry(); return; }
+  if(!confirm('이 글을 삭제할까요? 되돌릴 수 없어요.')) return;
+  entries = entries.filter(x => x.id !== currentId);
+  persist();
+  newEntry();
+  setStatus('삭제했어요');
+}
+
+function render(){
+  const q = $('search').value.trim().toLowerCase();
+  const list = entries
+    .filter(e => !q || (e.title+e.body).toLowerCase().includes(q))
+    .sort((a,b) => b.date.localeCompare(a.date) || b.updated - a.updated);
+
+  $('count').textContent = entries.length ? `기록 ${entries.length}개` : '';
+
+  if(!list.length){
+    $('list').innerHTML = '<div class="empty">' +
+      (entries.length ? '검색 결과가 없어요' : '아직 기록이 없어요.<br>오른쪽에 첫 글을 써보세요!') + '</div>';
+    return;
+  }
+
+  $('list').innerHTML = '';
+  for(const e of list){
+    const div = document.createElement('div');
+    div.className = 'item' + (e.id === currentId ? ' active' : '');
+    const t = document.createElement('div');
+    t.className = 't';
+    t.textContent = (e.mood ? e.mood + ' ' : '') + e.title;
+    const d = document.createElement('div');
+    d.className = 'd';
+    d.textContent = e.date + ' · ' + (e.body.slice(0,30) || '내용 없음');
+    div.append(t, d);
+    div.onclick = () => open(e.id);
+    $('list').appendChild(div);
+  }
+}
+
+$('new').onclick    = newEntry;
+$('save').onclick   = () => save(false);
+$('del').onclick    = remove;
+$('search').oninput = render;
+
+// 입력이 멈추면 1.5초 뒤 자동 저장
+for(const el of [$('title'), $('body'), $('date'), $('mood')]){
+  el.addEventListener('input', () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => save(true), 1500);
+  });
+}
+
+// Ctrl/Cmd + S 로 저장
+document.addEventListener('keydown', ev => {
+  if((ev.metaKey || ev.ctrlKey) && ev.key === 's'){ ev.preventDefault(); save(false); }
+});
+
+newEntry();
+</script>
+</body>
+</html>
