@@ -95,27 +95,72 @@ def sort_sources(files: list[Path], order_map: dict[str, int]) -> list[Path]:
 # ---------------------------------------------------------------------------
 # 배경 제거
 # ---------------------------------------------------------------------------
-def remove_background(
-    im: Image.Image, white_threshold: float = 32.0, feather: float = 1.6
-) -> Image.Image:
-    """테두리에서 시작해 흰색/거의 흰색으로 이어진 영역만 배경으로 간주해 투명화한다.
+def _kmeans(points: np.ndarray, k: int, iters: int = 10, seed: int = 0) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    k = min(k, len(points))
+    centers = points[rng.choice(len(points), size=k, replace=False)].copy()
+    for _ in range(iters):
+        dist = np.linalg.norm(points[:, None, :] - centers[None, :, :], axis=2)
+        assign = dist.argmin(axis=1)
+        for j in range(k):
+            cluster = points[assign == j]
+            if len(cluster):
+                centers[j] = cluster.mean(axis=0)
+    return centers
 
-    - 캐릭터 내부의 흰색(눈, 하이라이트 등)은 테두리와 연결돼 있지 않으므로 보존된다.
-    - 경계에 feather(가우시안 블러)를 적용해 계단 현상과 흰 테두리를 줄인다.
-    - 색 디콘타미네이션으로 반투명 경계의 흰색 번짐을 제거한다.
+
+def remove_background(
+    im: Image.Image,
+    ring_px: int = 4,
+    n_clusters: int = 6,
+    color_threshold: float = 26.0,
+    feather: float = 1.6,
+) -> Image.Image:
+    """이미지 테두리 색상을 자동으로 감지해, 테두리와 연결된 영역만 배경으로 간주해 투명화한다.
+
+    원본마다 배경이 흰색/회색/연한 체크무늬/미세한 그라데이션 등으로 제각각이라 고정된
+    흰색 기준으로는 일부가 전혀 투명화되지 않는 문제가 있었다. 대신 아주 얇은 테두리 링
+    (기본 4px)의 실제 색상들을 몇 개의 대표색(클러스터)으로 요약하고, 그 대표색과
+    색상 거리가 가까운 픽셀만 배경 후보로 삼는다. 팔레트 양자화 후 정확히 같은 색상
+    인덱스만 매칭하는 방식은 배경이 다색 그라데이션/디더링일 때 일부 중간 색조를
+    놓쳐 배경 전체가 테두리와 끊어지는 문제가 있었는데, 색상 거리 기반 매칭은 그런
+    중간 색조도 자연스럽게 포함한다.
+
+    링을 넓게 잡으면 테두리 근처의 반짝이 효과 같은 장식 요소 색상까지 배경 후보에
+    섞여 들어가 캐릭터 본체가 잘못 지워지므로, 실제 배경만 좁게 샘플링한다.
+
+    - 캐릭터 내부의 동일 색상(눈, 하이라이트 등)은 테두리와 연결돼 있지 않으므로 보존된다.
+    - 경계에 feather(가우시안 블러)를 적용해 계단 현상과 배경색 번짐을 줄인다.
+    - 색 디콘타미네이션으로 반투명 경계에 남는 배경색 번짐을 제거한다.
     """
-    rgb = np.asarray(im.convert("RGB"), dtype=np.float32)
+    rgb_im = im.convert("RGB")
+    rgb = np.asarray(rgb_im, dtype=np.float32)
     h, w, _ = rgb.shape
 
-    dist_from_white = np.sqrt(((rgb - 255.0) ** 2).sum(axis=2))
-    near_white = dist_from_white < white_threshold
+    ring = np.concatenate(
+        [
+            rgb[:ring_px, :].reshape(-1, 3),
+            rgb[-ring_px:, :].reshape(-1, 3),
+            rgb[:, :ring_px].reshape(-1, 3),
+            rgb[:, -ring_px:].reshape(-1, 3),
+        ]
+    )
+    sample_cap = 4000
+    if len(ring) > sample_cap:
+        ring = ring[np.random.default_rng(0).choice(len(ring), sample_cap, replace=False)]
 
-    labels, _ = cc_label(near_white)
+    centers = _kmeans(ring, n_clusters)
+    dist_to_centers = np.linalg.norm(rgb[:, :, None, :] - centers[None, None, :, :], axis=3)
+    min_dist = dist_to_centers.min(axis=2)
+    bg_candidate = min_dist < color_threshold
+
+    labels, _ = cc_label(bg_candidate)
     border_labels = set(labels[0, :].tolist()) | set(labels[-1, :].tolist())
     border_labels |= set(labels[:, 0].tolist()) | set(labels[:, -1].tolist())
     border_labels.discard(0)
 
     bg_mask = np.isin(labels, list(border_labels))
+    bg_color = rgb[bg_mask].mean(axis=0) if bg_mask.any() else np.array([255.0, 255.0, 255.0])
 
     alpha = np.where(bg_mask, 0.0, 255.0).astype(np.float32)
 
@@ -128,7 +173,7 @@ def remove_background(
         alpha = np.asarray(alpha_img, dtype=np.float32)
 
     alpha_norm = np.clip(alpha / 255.0, 0.0, 1.0)[..., None]
-    decontaminated = (rgb - (1 - alpha_norm) * 255.0) / np.clip(alpha_norm, 1e-3, 1.0)
+    decontaminated = (rgb - (1 - alpha_norm) * bg_color) / np.clip(alpha_norm, 1e-3, 1.0)
     decontaminated = np.clip(decontaminated, 0, 255)
 
     out = np.concatenate([decontaminated, alpha[..., None]], axis=2).astype(np.uint8)
@@ -188,6 +233,56 @@ def process_one(src_path: Path, size: tuple[int, int], margin_ratio: float) -> I
 
 
 # ---------------------------------------------------------------------------
+# 톤(밝기) 정규화
+# ---------------------------------------------------------------------------
+def masked_value_mean(im: Image.Image) -> float:
+    """불투명한(캐릭터) 영역만 골라 HSV의 V(명도) 평균을 구한다."""
+    arr = np.asarray(im.convert("RGBA"))
+    alpha = arr[:, :, 3]
+    mask = alpha > 200
+    if not mask.any():
+        return 128.0
+    hsv = np.asarray(im.convert("RGB").convert("HSV"))
+    return float(hsv[:, :, 2][mask].mean())
+
+
+def _apply_gamma(im: Image.Image, gamma: float) -> Image.Image:
+    arr = np.asarray(im.convert("RGBA"), dtype=np.float32)
+    rgb = 255.0 * np.power(np.clip(arr[:, :, :3], 0, 255) / 255.0, gamma)
+    out = np.concatenate([rgb, arr[:, :, 3:4]], axis=2).astype(np.uint8)
+    return Image.fromarray(out, mode="RGBA")
+
+
+def brighten_to_target(im: Image.Image, target_v: float, min_gamma: float = 0.3) -> Image.Image:
+    """이미지가 목표 명도보다 어두우면 감마 보정으로 밝게 끌어올린다(어두운 쪽으로는 조정하지 않음).
+
+    단순 곱셈 스케일링은 이미 밝은 하이라이트(고글 반사광 등)가 255에서 바로 클리핑돼
+    평균 명도가 목표까지 못 올라가는 경우가 많아, 감마 커브를 이진 탐색으로 맞춘다.
+    """
+    current_v = masked_value_mean(im)
+    if current_v <= 1.0 or current_v >= target_v:
+        return im
+    lo, hi = min_gamma, 1.0
+    gamma = 1.0
+    for _ in range(10):
+        gamma = (lo + hi) / 2
+        v = masked_value_mean(_apply_gamma(im, gamma))
+        if v < target_v:
+            hi = gamma
+        else:
+            lo = gamma
+    return _apply_gamma(im, gamma)
+
+
+def normalize_tone(images: list[Image.Image], percentile: float = 75.0) -> list[Image.Image]:
+    """세트 전체의 밝기를 맞춘다. 이미 밝은 상위 percentile 그룹 수준을 목표로,
+    그보다 어두운 이미지들만 그 밝기까지 끌어올려 톤을 통일한다."""
+    v_means = [masked_value_mean(im) for im in images]
+    target_v = float(np.percentile(v_means, percentile))
+    return [brighten_to_target(im, target_v) for im in images]
+
+
+# ---------------------------------------------------------------------------
 # 메인 파이프라인
 # ---------------------------------------------------------------------------
 def main() -> int:
@@ -202,6 +297,12 @@ def main() -> int:
     parser.add_argument("--main-source", default=None, help="메인 이미지로 쓸 원본 파일명(일부 문자열 매칭)")
     parser.add_argument("--tab-source", default=None, help="탭 이미지로 쓸 원본 파일명(일부 문자열 매칭)")
     parser.add_argument("--margin", type=float, default=MARGIN_RATIO, help="캔버스 여백 비율 (기본 0.06)")
+    parser.add_argument(
+        "--tone-percentile",
+        type=float,
+        default=75.0,
+        help="세트 밝기 통일 기준 백분위수 (기본 75: 상위 25%% 밝기를 목표로 어두운 이미지를 끌어올림)",
+    )
     args = parser.parse_args()
 
     src_dir = Path(args.src)
@@ -237,31 +338,39 @@ def main() -> int:
     main_source = pick_source(args.main_source, sticker_sources[0])
     tab_source = pick_source(args.tab_source, sticker_sources[0])
 
-    # --- 스티커 24개 ---
+    # --- 1단계: 배경 제거 + 리사이즈 (아직 저장하지 않음) ---
+    print(f"\n[변환] 스티커 {len(sticker_sources)}개 + 메인 1개 + 탭 1개 + 여분 {len(extra_sources)}개 처리 중...")
+    sticker_imgs = [process_one(src, STICKER_SIZE, args.margin) for src in sticker_sources]
+    main_img = process_one(main_source, MAIN_SIZE, args.margin)
+    tab_img = process_one(tab_source, TAB_SIZE, args.margin)
+    extra_imgs = [process_one(src, STICKER_SIZE, args.margin) for src in extra_sources]
+
+    # --- 2단계: 세트 전체 밝기 톤 통일 (어두운 것들만 밝은 쪽 기준으로 끌어올림) ---
+    all_imgs = sticker_imgs + [main_img, tab_img] + extra_imgs
+    normalized = normalize_tone(all_imgs, percentile=args.tone_percentile)
+    n_stickers = len(sticker_imgs)
+    sticker_imgs = normalized[:n_stickers]
+    main_img = normalized[n_stickers]
+    tab_img = normalized[n_stickers + 1]
+    extra_imgs = normalized[n_stickers + 2 :]
+
+    # --- 3단계: 저장 ---
     stickers_dir = out_dir / "stickers"
-    print(f"\n[스티커] {STICKER_SIZE[0]}x{STICKER_SIZE[1]} x {len(sticker_sources)}개 생성")
-    for idx, src in enumerate(sticker_sources, start=1):
-        result = process_one(src, STICKER_SIZE, args.margin)
+    for idx, (src, result) in enumerate(zip(sticker_sources, sticker_imgs), start=1):
         out_path = stickers_dir / f"{idx:02d}.png"
         save_png(result, out_path)
         print(f"  {idx:02d}.png  <-  {src.name}")
 
-    # --- 메인 이미지 ---
     print(f"\n[메인] {MAIN_SIZE[0]}x{MAIN_SIZE[1]}  <-  {main_source.name}")
-    main_img = process_one(main_source, MAIN_SIZE, args.margin)
     save_png(main_img, out_dir / "main" / "main.png")
 
-    # --- 탭 이미지 ---
     print(f"[탭]   {TAB_SIZE[0]}x{TAB_SIZE[1]}  <-  {tab_source.name}")
-    tab_img = process_one(tab_source, TAB_SIZE, args.margin)
     save_png(tab_img, out_dir / "tab" / "tab.png")
 
-    # --- 24개 초과분은 후보로 별도 보관 ---
     if extra_sources:
         extra_dir = out_dir / "_extra_candidates"
         print(f"\n[여분 후보] 24개를 초과한 {len(extra_sources)}개는 스티커 규격으로만 변환해 보관합니다.")
-        for idx, src in enumerate(extra_sources, start=1):
-            result = process_one(src, STICKER_SIZE, args.margin)
+        for idx, (src, result) in enumerate(zip(extra_sources, extra_imgs), start=1):
             out_path = extra_dir / f"extra_{idx:02d}.png"
             save_png(result, out_path)
             print(f"  extra_{idx:02d}.png  <-  {src.name}")
