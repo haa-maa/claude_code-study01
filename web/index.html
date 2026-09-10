@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>오늘의 기록</title>
+<meta name="description" content="비밀번호와 잠금 패턴으로 여는 개인 일기장. 기록은 이 기기 안에서 암호화되어 보관됩니다.">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#b3372c" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12161c" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="오늘의 기록">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+</head>
+<body>
+<style>
+  :root{
+    --paper:#fbfbf9;
+    --panel:#ffffff;
+    --ink:#1b2430;
+    --ink-soft:#5d6b7a;
+    --rule:#e3e6ea;
+    --rule-soft:#eef0f3;
+    --seal:#b3372c;
+    --seal-soft:#f7eae8;
+    --scrim:rgba(27,36,48,.38);
+    --sans:"Noto Sans KR","Apple SD Gothic Neo",system-ui,sans-serif;
+    --serif:"Nanum Myeongjo","Apple SD Gothic Neo",Georgia,serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#12161c;
+      --panel:#181d25;
+      --ink:#e6eaf0;
+      --ink-soft:#8e9aa8;
+      --rule:#2a323c;
+      --rule-soft:#212832;
+      --seal:#e0685a;
+      --seal-soft:#2e1f1e;
+      --scrim:rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#12161c;
+    --panel:#181d25;
+    --ink:#e6eaf0;
+    --ink-soft:#8e9aa8;
+    --rule:#2a323c;
+    --rule-soft:#212832;
+    --seal:#e0685a;
+    --seal-soft:#2e1f1e;
+    --scrim:rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box}
+  /* Artifact 껍데기가 넣어 주던 규칙 — 독립 페이지에서도 필요하다 */
+  [hidden]{display:none!important}
+  body{
+    margin:0;
+    overflow-x:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:15px;
+    -webkit-text-size-adjust:100%;
+  }
+  :focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+  button{
+    font-family:var(--sans);font-size:13.5px;
+    cursor:pointer;border-radius:3px;
+    border:1px solid var(--rule);
+    background:var(--panel);color:var(--ink);
+    padding:8px 14px;
+    transition:border-color .15s, background .15s, color .15s;
+  }
+  button:hover{border-color:var(--ink-soft)}
+  button.solid{
+    background:var(--ink);border-color:var(--ink);
+    color:var(--panel);font-weight:500;
+  }
+  button.solid:hover{filter:brightness(1.25)}
+  button.quiet{border-color:transparent;color:var(--ink-soft);padding:8px 10px}
+  button.quiet:hover{color:var(--seal);border-color:transparent}
+  button.risk:hover{border-color:var(--seal);color:var(--seal)}
+  button:disabled{opacity:.45;cursor:default}
+  button:disabled:hover{border-color:var(--rule)}
+
+  /* ================= 표지 ================= */
+  .cover{
+    min-height:100svh;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:24px;
+    padding:48px 20px calc(48px + env(safe-area-inset-bottom));
+    background:var(--paper);
+  }
+  @media (max-width:720px){
+    .cover{gap:20px;padding:32px 18px calc(32px + env(safe-area-inset-bottom))}
+    .cover h1{font-size:27px}
+  }
+  .seal{
+    width:74px;height:74px;flex:none;position:relative;
+    display:grid;place-items:center;
+    background:var(--seal);border-radius:4px;
+    box-shadow:0 1px 0 rgba(0,0,0,.08);
+    transition:width .45s cubic-bezier(.2,.85,.25,1),
+               height .45s cubic-bezier(.2,.85,.25,1),
+               border-radius .45s;
+  }
+  .seal .glyph{
+    color:#fff;font-family:var(--serif);font-size:38px;font-weight:700;
+    line-height:1;padding-bottom:3px;
+    transition:opacity .22s, font-size .45s;
+  }
+  .seal.open{
+    width:min(272px, 78vw);height:min(272px, 78vw);
+    border-radius:7px;
+  }
+  .seal.open .glyph{opacity:0;font-size:0;pointer-events:none}
+
+  /* 9점 패턴판 */
+  .padhost{
+    position:absolute;inset:0;padding:min(26px, 7vw);
+    opacity:0;pointer-events:none;
+    transition:opacity .28s .16s;
+    touch-action:none;
+  }
+  .seal.open .padhost{opacity:1;pointer-events:auto}
+  .padhost.standalone{
+    position:relative;inset:auto;
+    width:min(248px, 72vw);height:min(248px, 72vw);align-self:center;
+    background:var(--seal);border-radius:7px;
+    opacity:1;pointer-events:auto;transition:none;
+  }
+  .padhost svg{position:absolute;inset:0;width:100%;height:100%}
+  .padhost svg .trace{
+    fill:none;stroke:#fff;stroke-width:2.2;
+    stroke-linecap:round;stroke-linejoin:round;opacity:.85;
+  }
+  .padhost .dots{
+    position:relative;height:100%;
+    display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+  }
+  .padhost .dot{
+    display:grid;place-items:center;
+    background:none;border:0;padding:0;cursor:pointer;
+  }
+  .padhost .dot:hover{border:0}
+  .padhost .dot b{
+    display:block;width:clamp(14px, 4.6vw, 17px);height:clamp(14px, 4.6vw, 17px);
+    border-radius:50%;
+    background:rgba(255,255,255,.42);
+    transition:transform .14s, background .14s, box-shadow .14s;
+  }
+  .padhost .dot.on b{
+    background:#fff;transform:scale(1.35);
+    box-shadow:0 0 0 6px rgba(255,255,255,.22);
+  }
+  .padhost .dot:focus-visible{outline:2px solid #fff;outline-offset:-4px;border-radius:4px}
+  .padtools{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .cover h1{
+    margin:0;font-family:var(--serif);
+    font-size:32px;font-weight:700;letter-spacing:.02em;
+    text-wrap:balance;text-align:center;
+  }
+  .cover .sub{
+    margin:-12px 0 0;max-width:36ch;text-align:center;
+    color:var(--ink-soft);font-size:13.5px;line-height:1.75;
+  }
+  .gate{
+    width:100%;max-width:330px;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .gate input{
+    width:100%;padding:11px 13px;
+    border:1px solid var(--rule);border-radius:3px;
+    background:var(--panel);color:var(--ink);
+    font-family:var(--mono);font-size:15px;letter-spacing:.08em;
+  }
+  .gate input::placeholder{
+    font-family:var(--sans);letter-spacing:0;color:var(--ink-soft);
+  }
+  .gate input:focus{outline:none;border-color:var(--seal)}
+  .gate button{padding:12px 14px;font-size:14px;min-height:46px}
+  .gate .why{
+    margin:0;min-height:19px;font-size:12.5px;line-height:1.5;
+    color:var(--seal);text-align:center;
+  }
+  .cover .ways{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+  .cover .escape{
+    font-size:12px;color:var(--ink-soft);
+    background:none;border:0;padding:6px;text-decoration:underline;
+  }
+  .cover .escape:hover{color:var(--seal)}
+  .waiting{color:var(--ink-soft);font-family:var(--mono);font-size:13px}
+
+  /* ================= 겹쳐 띄우는 판 ================= */
+  .over{
+    position:fixed;inset:0;z-index:20;
+    display:flex;align-items:center;justify-content:center;
+    padding:20px;background:var(--scrim);
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  @media (max-width:720px){
+    .over{padding:14px;align-items:flex-start}
+    .card{padding:20px;margin:auto 0}
+  }
+  .card{
+    width:100%;max-width:420px;
+    background:var(--panel);border:1px solid var(--rule);border-radius:5px;
+    padding:24px;display:flex;flex-direction:column;gap:14px;
+    box-shadow:0 8px 32px rgba(0,0,0,.16);
+  }
+  .card h2{
+    margin:0;font-family:var(--serif);font-size:21px;font-weight:700;
+  }
+  .card p{margin:0;font-size:13.5px;line-height:1.75;color:var(--ink-soft)}
+  .card p.stern{color:var(--seal)}
+  .card input{
+    width:100%;padding:10px 12px;
+    border:1px solid var(--rule);border-radius:3px;
+    background:var(--paper);color:var(--ink);
+    font-family:var(--mono);font-size:14px;letter-spacing:.06em;
+  }
+  .card input::placeholder{font-family:var(--sans);letter-spacing:0;color:var(--ink-soft)}
+  .card input:focus{outline:none;border-color:var(--seal)}
+  .card input{min-height:44px}
+  .card .buttons{display:flex;gap:8px;flex-wrap:wrap}
+  .card .buttons button{min-height:44px}
+  .card .why{margin:0;min-height:18px;font-size:12.5px;color:var(--seal)}
+
+
+  /* ================= 머리말 ================= */
+  .top{
+    display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;
+    padding:16px 26px;
+    padding-top:calc(16px + env(safe-area-inset-top));
+    background:var(--panel);
+    border-bottom:1px solid var(--rule);
+    position:sticky;top:0;z-index:10;
+  }
+  .top h1{
+    margin:0;
+    font-family:var(--serif);
+    font-size:23px;font-weight:700;letter-spacing:.01em;
+  }
+  .top .tally{
+    font-family:var(--mono);font-size:12px;color:var(--ink-soft);
+    font-variant-numeric:tabular-nums;
+  }
+  .top .push{flex:1}
+  .top .acts{display:flex;gap:8px;flex-wrap:wrap}
+
+  /* 좁은 화면: 버튼 줄은 옆으로 밀어 보고, 목록/쓰기를 나눠 본다 */
+  .views{display:none}
+  @media (max-width:720px){
+    .top{padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top));gap:8px 10px}
+    .top h1{font-size:19px}
+    .top .push{display:none}
+    .top .acts{
+      order:3;width:100%;min-width:0;flex-wrap:nowrap;
+      overflow-x:auto;scrollbar-width:none;
+      -webkit-overflow-scrolling:touch;
+      /* 밀어 볼 때 끝이 잘려 보이도록 살짝 여유 */
+      padding-bottom:2px;
+    }
+    .top .acts::-webkit-scrollbar{display:none}
+    .top .acts button{flex:none;min-height:40px}
+
+    .views{
+      display:flex;order:2;margin-left:auto;flex:none;
+      border:1px solid var(--rule);border-radius:4px;overflow:hidden;
+    }
+    .views button{
+      border:0;border-radius:0;padding:8px 15px;font-size:13px;min-height:38px;
+      background:var(--paper);color:var(--ink-soft);
+    }
+    .views button:hover{border:0}
+    .views button[aria-selected="true"]{
+      background:var(--ink);color:var(--panel);font-weight:500;
+    }
+  }
+
+  /* ================= 두 칸 배치 ================= */
+  .frame{
+    display:grid;grid-template-columns:264px minmax(0,1fr);
+    height:calc(100svh - 63px);min-height:520px;
+  }
+  @media (max-width:960px){
+    .frame{grid-template-columns:224px minmax(0,1fr)}
+  }
+  @media (max-width:720px){
+    .frame{grid-template-columns:1fr;height:auto;min-height:0}
+    .frame > .index,
+    .frame > .sheet{display:none}
+    .frame[data-view="list"] > .index{display:flex}
+    .frame[data-view="sheet"] > .sheet{display:flex}
+    .index{
+      border-right:0;max-height:none;
+      padding:14px 12px calc(24px + env(safe-area-inset-bottom));
+    }
+  }
+
+  /* ================= 왼쪽 색인 ================= */
+  .index{
+    border-right:1px solid var(--rule);
+    background:var(--panel);
+    overflow-y:auto;
+    padding:16px 14px 28px;
+    display:flex;flex-direction:column;gap:14px;
+  }
+  .find{
+    width:100%;padding:8px 11px;
+    border:1px solid var(--rule);border-radius:3px;
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);font-size:13.5px;
+  }
+  .find::placeholder{color:var(--ink-soft)}
+  .find:focus{outline:none;border-color:var(--seal)}
+
+  .months{display:flex;flex-direction:column;gap:18px}
+  .month{display:flex;flex-direction:column;gap:2px}
+  .month > h2{
+    margin:0 0 4px;padding-bottom:5px;
+    border-bottom:1px solid var(--rule-soft);
+    font-family:var(--mono);font-size:11px;font-weight:500;
+    letter-spacing:.12em;
+    color:var(--ink-soft);
+  }
+
+  .row{
+    display:grid;grid-template-columns:26px minmax(0,1fr);
+    gap:10px;align-items:baseline;
+    padding:9px;border-radius:3px;min-height:46px;
+    border-left:2px solid transparent;
+    cursor:pointer;text-align:left;width:100%;
+    background:none;border-top:0;border-right:0;border-bottom:0;
+    font-family:var(--sans);
+  }
+  .row:hover{background:var(--paper);border-left-color:var(--rule)}
+  .row[aria-current="true"]{background:var(--seal-soft);border-left-color:var(--seal)}
+  .row .day{
+    font-family:var(--mono);font-size:13px;color:var(--ink-soft);
+    font-variant-numeric:tabular-nums;
+  }
+  .row[aria-current="true"] .day{color:var(--seal)}
+  .row .cap{min-width:0}
+  .row .cap b{
+    display:block;font-weight:500;font-size:13.5px;line-height:1.35;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .row .cap span{
+    display:block;font-size:12px;color:var(--ink-soft);line-height:1.4;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .row .cap .at{
+    font-family:var(--mono);font-style:normal;
+    font-variant-numeric:tabular-nums;
+    margin-right:6px;opacity:.85;
+  }
+  .row.sample .cap b::after{
+    content:"예시";
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
+    color:var(--ink-soft);border:1px solid var(--rule);
+    border-radius:2px;padding:1px 4px;margin-left:6px;vertical-align:1px;
+  }
+  .none{color:var(--ink-soft);font-size:13px;line-height:1.8;padding:10px 4px}
+
+  /* ================= 오른쪽 원고 ================= */
+  .sheet{
+    overflow-y:auto;padding:26px 30px 40px;
+    display:flex;flex-direction:column;gap:16px;
+  }
+  @media (max-width:720px){
+    .sheet{padding:16px 16px calc(20px + env(safe-area-inset-bottom));gap:13px}
+    .manuscript{padding-left:15px}
+    #heading{font-size:22px}
+    #page{min-height:42svh;font-size:16px;line-height:1.9}
+    .stamp{gap:8px}
+    .stamp input[type=date],.stamp input[type=time],.stamp select{min-height:40px}
+    .foot{
+      position:sticky;bottom:0;z-index:5;
+      background:var(--paper);
+      padding:10px 0 calc(4px + env(safe-area-inset-bottom));
+      border-top:1px solid var(--rule-soft);
+    }
+    .foot button{min-height:44px;flex:1 1 auto}
+    .note{width:100%;margin-left:0;text-align:right}
+  }
+  .stamp{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .stamp input[type=date],.stamp input[type=time],.stamp select{
+    font-family:var(--mono);font-size:13px;
+    padding:7px 9px;border:1px solid var(--rule);border-radius:3px;
+    background:var(--panel);color:var(--ink);
+  }
+  .stamp select{font-family:var(--sans)}
+  .stamp input[type=date]:focus,.stamp input[type=time]:focus,
+  .stamp select:focus{outline:none;border-color:var(--seal)}
+  .stamp input[type=date]:disabled,.stamp input[type=time]:disabled,
+  .stamp select:disabled{
+    background:var(--paper);color:var(--ink-soft);
+    border-color:var(--rule-soft);opacity:1;
+  }
+  .weekday{
+    font-family:var(--mono);font-size:12px;color:var(--seal);
+    letter-spacing:.1em;
+  }
+  .lockmark{
+    font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+    color:var(--ink-soft);border:1px solid var(--rule);
+    border-radius:2px;padding:3px 7px;
+  }
+
+  .manuscript{
+    border-left:2px solid var(--seal);
+    padding-left:22px;
+    display:flex;flex-direction:column;gap:12px;
+    flex:1;
+    transition:border-color .15s;
+  }
+  body.locked .manuscript{border-left-color:var(--rule)}
+  body.locked .weekday{color:var(--ink-soft)}
+  #heading{
+    width:100%;border:0;background:transparent;color:var(--ink);
+    font-family:var(--serif);font-size:26px;font-weight:700;
+    line-height:1.3;padding:2px 0;
+  }
+  #heading:focus{outline:none}
+  #heading::placeholder,#page::placeholder{color:var(--ink-soft);font-weight:400}
+  #page{
+    flex:1;min-height:340px;width:100%;max-width:64ch;resize:vertical;
+    border:0;border-top:1px solid var(--rule-soft);
+    background:transparent;color:var(--ink);
+    font-family:var(--sans);font-size:15px;line-height:2;
+    padding:14px 0 0;
+  }
+  #page:focus{outline:none}
+  body.locked #heading,body.locked #page{cursor:default}
+
+  .foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:4px}
+  .note{
+    margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink-soft);
+  }
+  .note.warn{color:var(--seal)}
+</style>
+
+<!-- ================= 표지 ================= -->
+<section class="cover" id="cover">
+  <div class="seal" id="seal">
+    <span class="glyph" aria-hidden="true">記</span>
+    <div class="padhost" id="coverPad" role="application" aria-label="잠금 패턴 그리기"></div>
+  </div>
+  <h1>오늘의 기록</h1>
+  <p class="sub" id="coverSub">비밀번호를 확인하고 있습니다…</p>
+
+  <form class="gate" id="gate" hidden autocomplete="off">
+    <input type="password" id="pass1" placeholder="비밀번호" autocomplete="current-password">
+    <input type="password" id="pass2" placeholder="비밀번호 다시 한 번" autocomplete="new-password" hidden>
+    <button class="solid" type="submit" id="enter">열기</button>
+    <p class="why" id="why" role="status"></p>
+  </form>
+
+  <div class="padtools" id="padTools" hidden>
+    <button id="padClear">다시</button>
+    <button class="solid" id="padGo">확인</button>
+  </div>
+  <p class="why" id="patWhy" role="status"></p>
+
+  <p class="waiting" id="waiting">잠시만요</p>
+
+  <div class="ways">
+    <button class="escape" id="forgot" hidden>비밀번호를 잊었습니다</button>
+    <button class="escape" id="backToPass" hidden>비밀번호로 돌아가기</button>
+    <button class="escape" id="wipe" hidden>전부 지우고 새로 시작</button>
+  </div>
+</section>
+
+<!-- ================= 잠금 패턴 등록 ================= -->
+<div class="over" id="patOver" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="patTitle">
+    <h2 id="patTitle">잠금 패턴</h2>
+    <p id="patLead">점 5개 이상을 이어 패턴을 그려 주세요. 비밀번호를 잊었을 때 이 패턴으로 열 수 있습니다.</p>
+    <div class="padhost standalone" id="regPad" role="application" aria-label="잠금 패턴 그리기"></div>
+    <div class="padtools">
+      <button id="regClear">다시</button>
+      <button class="solid" id="regGo">확인</button>
+    </div>
+    <p class="stern">패턴은 비밀번호보다 조합이 적어 약합니다. 남이 어깨너머로 보기 쉬운 모양(ㄱ·ㄴ·Z 같은 단순한 선)은 피하세요.</p>
+    <p class="why" id="regWhy" role="status"></p>
+    <div class="buttons">
+      <button id="regOff" hidden>패턴 없애기</button>
+      <button id="regCancel">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 비밀번호 바꾸기 ================= -->
+<div class="over" id="passOver" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="passTitle">
+    <h2 id="passTitle">비밀번호 바꾸기</h2>
+    <p id="passWhyOpen">새 비밀번호를 정하면 지금까지의 기록이 그 비밀번호로 다시 잠깁니다.</p>
+    <input type="password" id="newPass1" placeholder="새 비밀번호 (4자 이상)" autocomplete="new-password">
+    <input type="password" id="newPass2" placeholder="새 비밀번호 다시 한 번" autocomplete="new-password">
+    <p class="why" id="pwhy" role="status"></p>
+    <div class="buttons">
+      <button class="solid" id="passSave">바꾸기</button>
+      <button id="passCancel">나중에</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 본문 ================= -->
+<div id="app" hidden>
+  <header class="top">
+    <h1>오늘의 기록</h1>
+    <span class="tally" id="tally"></span>
+    <span class="push"></span>
+    <div class="views" role="tablist" aria-label="화면 전환">
+      <button type="button" id="viewList" role="tab" aria-selected="false">목록</button>
+      <button type="button" id="viewSheet" role="tab" aria-selected="true">쓰기</button>
+    </div>
+    <div class="acts">
+      <button class="solid" id="compose">새 글</button>
+      <button id="lockNow">잠그기</button>
+      <button class="quiet" id="patBtn">패턴</button>
+      <button class="quiet" id="passBtn">비밀번호</button>
+      <button class="quiet" id="export">내보내기</button>
+    </div>
+  </header>
+
+  <div class="frame" id="frame" data-view="sheet">
+    <nav class="index" aria-label="기록 목록">
+      <input class="find" id="find" type="search" placeholder="제목·내용 찾기" autocomplete="off">
+      <div class="months" id="months"></div>
+    </nav>
+
+    <main class="sheet">
+      <div class="stamp">
+        <input type="date" id="when" aria-label="날짜">
+        <input type="time" id="clock" aria-label="시간" step="60">
+        <span class="weekday" id="weekday"></span>
+        <select id="feel" aria-label="기분">
+          <option value="">기분 —</option>
+          <option value="😊">😊 좋음</option>
+          <option value="🙂">🙂 보통</option>
+          <option value="😔">😔 가라앉음</option>
+          <option value="😡">😡 화남</option>
+          <option value="🥱">🥱 지침</option>
+          <option value="🥳">🥳 신남</option>
+        </select>
+        <span class="lockmark" id="lockmark" hidden>읽기 전용</span>
+      </div>
+
+      <div class="manuscript">
+        <input id="heading" placeholder="제목" autocomplete="off">
+        <textarea id="page" placeholder="오늘 있었던 일을 적어보세요."></textarea>
+      </div>
+
+      <div class="foot">
+        <button class="solid" id="keep">저장</button>
+        <button class="solid" id="amend">수정</button>
+        <button id="revert">취소</button>
+        <button id="close">닫기</button>
+        <button class="risk" id="drop">삭제</button>
+        <span class="note" id="note"></span>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var LOCAL_KEY = "oneuli-girok-v2";
+  var OLD_KEY   = "oneuli-girok";
+  var META_PATH = "vault/meta";
+  var PATTERN_PATH = "vault/pattern";
+  var IDLE_MS = 15 * 60 * 1000;
+  var ROUNDS  = 250000;
+  var ROUNDS_PAT = 600000;   // 패턴은 조합이 적어 더 오래 돌린다
+  var MIN_DOTS = 5;
+  var DAYS = ["일","월","화","수","목","금","토"];
+  // 헷갈리는 글자(I, O, 0, 1)를 뺀 알파벳
+  var ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+  var el = function(id){ return document.getElementById(id); };
+
+  var entries = [];
+  var openId = null;
+  var mode = "new";
+  var db = null;
+  var master = null;      // 기록을 잠그는 열쇠
+  var meta = null;        // {salt, iv, wrap} — 비밀번호로 감싼 열쇠
+  var hasPattern = false;
+  var coverPad = null, regPad = null;
+  var saveTimer = null, idleTimer = null;
+  var stopWatching = null;
+  var carriedOver = [];
+  var saveFile = null;    // downloads 능력
+
+  /* ---------------- 좁은 화면: 목록 / 쓰기 ---------------- */
+  var narrow = window.matchMedia ? window.matchMedia("(max-width: 720px)") : null;
+  function isNarrow(){ return narrow ? narrow.matches : false; }
+
+  function showView(which){
+    el("frame").setAttribute("data-view", which);
+    el("viewList").setAttribute("aria-selected", which === "list" ? "true" : "false");
+    el("viewSheet").setAttribute("aria-selected", which === "sheet" ? "true" : "false");
+  }
+
+  /* ---------------- 날짜·시간 ---------------- */
+  function iso(d){
+    return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  }
+  function hhmm(d){
+    var h = d.getHours(), m = d.getMinutes();
+    return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m;
+  }
+  function clockOf(e){
+    if(/^\d{1,2}:\d{2}$/.test(e.time || "")) return e.time;
+    return e.edited ? hhmm(new Date(e.edited)) : "";
+  }
+  function weekdayOf(s){
+    var p = String(s).split("-");
+    if(p.length !== 3) return "";
+    var d = new Date(+p[0], +p[1]-1, +p[2]);
+    return isNaN(d) ? "" : DAYS[d.getDay()] + "요일";
+  }
+
+  /* ---------------- 자물쇠 바탕 ---------------- */
+  var subtle = (window.crypto && window.crypto.subtle) ? window.crypto.subtle : null;
+
+  function toB64(buf){
+    var b = new Uint8Array(buf), s = "";
+    for(var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+    return btoa(s);
+  }
+  function fromB64(str){
+    var s = atob(str), b = new Uint8Array(s.length);
+    for(var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i);
+    return b;
+  }
+
+  // 비밀번호·패턴에서 감싸는 열쇠를 만든다
+  function wrapper(secret, salt, rounds){
+    return subtle.importKey("raw", new TextEncoder().encode(secret), "PBKDF2", false, ["deriveKey"])
+      .then(function(base){
+        return subtle.deriveKey(
+          { name:"PBKDF2", salt: salt, iterations: rounds || ROUNDS, hash:"SHA-256" },
+          base, { name:"AES-GCM", length:256 }, false, ["encrypt","decrypt"]
+        );
+      });
+  }
+
+  function newMaster(){
+    return subtle.generateKey({ name:"AES-GCM", length:256 }, true, ["encrypt","decrypt"]);
+  }
+
+  // 열쇠를 비밀 문구로 감싸 {salt, iv, wrap} 를 만든다
+  function wrapMaster(secret, rounds){
+    var salt = window.crypto.getRandomValues(new Uint8Array(16));
+    var iv = window.crypto.getRandomValues(new Uint8Array(12));
+    return Promise.all([wrapper(secret, salt, rounds), subtle.exportKey("raw", master)])
+      .then(function(pair){
+        return subtle.encrypt({ name:"AES-GCM", iv: iv }, pair[0], pair[1]);
+      })
+      .then(function(ct){
+        return { salt: toB64(salt), iv: toB64(iv), wrap: toB64(ct) };
+      });
+  }
+
+  // 감싼 것을 풀어 열쇠를 되찾는다 (문구가 틀리면 실패)
+  function unwrapMaster(secret, box, rounds){
+    return wrapper(secret, fromB64(box.salt), rounds).then(function(kek){
+      return subtle.decrypt({ name:"AES-GCM", iv: fromB64(box.iv) }, kek, fromB64(box.wrap));
+    }).then(function(raw){
+      return subtle.importKey("raw", raw, { name:"AES-GCM" }, true, ["encrypt","decrypt"]);
+    });
+  }
+
+  function seal(obj){
+    var iv = window.crypto.getRandomValues(new Uint8Array(12));
+    var body = new TextEncoder().encode(JSON.stringify(obj));
+    return subtle.encrypt({ name:"AES-GCM", iv: iv }, master, body)
+      .then(function(ct){ return { iv: toB64(iv), cipher: toB64(ct) }; });
+  }
+  function unseal(blob){
+    return subtle.decrypt(
+      { name:"AES-GCM", iv: fromB64(blob.iv) }, master, fromB64(blob.cipher)
+    ).then(function(pt){ return JSON.parse(new TextDecoder().decode(pt)); });
+  }
+
+  function patSecret(seq){ return "PAT:" + seq.join("-"); }
+
+  function storePattern(seq){
+    return wrapMaster(patSecret(seq), ROUNDS_PAT).then(function(box){
+      saveLocal({ pattern: box });
+      hasPattern = true;
+      if(db) return db.doc(PATTERN_PATH).set(box).catch(function(){});
+    });
+  }
+
+  function dropPattern(){
+    saveLocal({ pattern: null });
+    hasPattern = false;
+    if(db) db.doc(PATTERN_PATH).delete().catch(function(){});
+  }
+
+  /* ---------------- 9점 패턴판 ---------------- */
+  // host 안에 선 + 점 9개를 만들고, 끌기와 눌러 찍기 둘 다 받는다
+  function makePad(host){
+    host.textContent = "";
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.setAttribute("preserveAspectRatio", "none");
+    var trace = document.createElementNS(NS, "polyline");
+    trace.setAttribute("class", "trace");
+    svg.appendChild(trace);
+    host.appendChild(svg);
+
+    var grid = document.createElement("div");
+    grid.className = "dots";
+    var dots = [];
+    for(var i = 0; i < 9; i++){
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "dot";
+      b.setAttribute("aria-label", (i + 1) + "번 점");
+      var mark = document.createElement("b");
+      b.appendChild(mark);
+      grid.appendChild(b);
+      dots.push(b);
+    }
+    host.appendChild(grid);
+
+    var seq = [], dragging = false, dragged = false;
+
+    var pad = {
+      onDone: null,
+      get: function(){ return seq.slice(); },
+      clear: function(){
+        seq = [];
+        dots.forEach(function(d){ d.classList.remove("on"); });
+        trace.setAttribute("points", "");
+      }
+    };
+
+    function centre(i){
+      var hr = host.getBoundingClientRect(), dr = dots[i].getBoundingClientRect();
+      return {
+        x: dr.left + dr.width / 2 - hr.left,
+        y: dr.top + dr.height / 2 - hr.top,
+        w: hr.width || 1, h: hr.height || 1
+      };
+    }
+    function redraw(tail){
+      var pts = seq.map(function(i){
+        var c = centre(i);
+        return (c.x / c.w * 100).toFixed(2) + "," + (c.y / c.h * 100).toFixed(2);
+      });
+      if(tail) pts.push(tail);
+      trace.setAttribute("points", pts.join(" "));
+    }
+    function add(i){
+      if(i < 0 || seq.indexOf(i) !== -1) return false;
+      seq.push(i);
+      dots[i].classList.add("on");
+      return true;
+    }
+    function at(x, y){
+      for(var i = 0; i < 9; i++){
+        var c = centre(i);
+        var r = Math.min(c.w, c.h) * 0.16;
+        var dx = x - c.x, dy = y - c.y;
+        if(dx * dx + dy * dy <= r * r) return i;
+      }
+      return -1;
+    }
+    function local(ev){
+      var hr = host.getBoundingClientRect();
+      return { x: ev.clientX - hr.left, y: ev.clientY - hr.top };
+    }
+
+    host.addEventListener("pointerdown", function(ev){
+      if(ev.button !== undefined && ev.button !== 0) return;
+      ev.preventDefault();
+      dragging = true; dragged = false;
+      pad.clear();
+      try { host.setPointerCapture(ev.pointerId); } catch(e){}
+      var q = local(ev);
+      add(at(q.x, q.y));
+      redraw(null);
+    });
+    host.addEventListener("pointermove", function(ev){
+      if(!dragging) return;
+      dragged = true;
+      var q = local(ev);
+      add(at(q.x, q.y));
+      var hr = host.getBoundingClientRect();
+      redraw(seq.length ? (q.x / hr.width * 100).toFixed(2) + "," + (q.y / hr.height * 100).toFixed(2) : null);
+    });
+    function stop(){
+      if(!dragging) return;
+      dragging = false;
+      redraw(null);
+      if(dragged && seq.length && pad.onDone) pad.onDone(seq.slice());
+    }
+    host.addEventListener("pointerup", stop);
+    host.addEventListener("pointercancel", stop);
+
+    // 눌러 찍기 (끌기가 어려운 경우 · 키보드)
+    dots.forEach(function(b, i){
+      b.addEventListener("click", function(ev){
+        ev.preventDefault();
+        if(dragged){ dragged = false; return; }
+        add(i);
+        redraw(null);
+      });
+    });
+
+    return pad;
+  }
+
+  /* ---------------- 보관 ---------------- */
+  function localBox(){
+    try { return JSON.parse(localStorage.getItem(LOCAL_KEY) || "null"); }
+    catch(e){ return null; }
+  }
+  function saveLocal(patch){
+    var box = localBox() || {};
+    for(var k in patch) if(Object.prototype.hasOwnProperty.call(patch, k)) box[k] = patch[k];
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(box)); }
+    catch(e){ say("이 브라우저의 저장 공간이 가득 찼습니다", true); }
+  }
+  function oldPlainEntries(){
+    try {
+      var raw = JSON.parse(localStorage.getItem(OLD_KEY));
+      return Array.isArray(raw) ? raw : [];
+    } catch(e){ return []; }
+  }
+
+  function mirror(){
+    if(!master) return Promise.resolve();
+    return seal(entries).then(function(blob){ saveLocal({ vault: blob }); })
+      .catch(function(){});
+  }
+
+  function persist(entry){
+    mirror();
+    if(!db) return;
+    seal({
+      when: entry.when, time: entry.time || "", feel: entry.feel || "",
+      heading: entry.heading, page: entry.page, edited: entry.edited
+    }).then(function(blob){
+      return db.doc("entries/" + entry.id).set(blob);
+    }).catch(function(err){ say(dbTrouble(err), true); });
+  }
+
+  function forget(id){
+    mirror();
+    if(!db) return;
+    db.doc("entries/" + id).delete().catch(function(err){ say(dbTrouble(err), true); });
+  }
+
+  function dbTrouble(err){
+    var code = err && err.code;
+    if(code === "quota_exceeded") return "기록이 너무 많아 더 저장할 수 없습니다";
+    if(code === "resource_exhausted") return "잠시 후 다시 저장해 주세요";
+    if(code === "revoked" || code === "not_granted") return "이 브라우저에만 저장됩니다";
+    return "서버 저장 실패 — 이 브라우저에는 남아 있습니다";
+  }
+
+  function say(msg, warn){
+    var note = el("note");
+    note.textContent = msg;
+    note.className = "note" + (warn ? " warn" : "");
+    if(!msg) return;
+    setTimeout(function(){
+      if(note.textContent === msg){ note.textContent = ""; note.className = "note"; }
+    }, 3600);
+  }
+
+  /* ---------------- 표지 ---------------- */
+  function coverMode(kind){
+    var sub = el("coverSub");
+    el("waiting").hidden = (kind !== "wait");
+    el("gate").hidden = (kind !== "setup" && kind !== "unlock");
+    el("forgot").hidden = (kind !== "unlock");
+    el("backToPass").hidden = (kind !== "pattern");
+    el("wipe").hidden = (kind !== "pattern");
+
+    // 인장이 커지며 패턴판으로 바뀐다
+    var open = (kind === "pattern");
+    el("seal").classList.toggle("open", open);
+    el("padTools").hidden = !open;
+    el("patWhy").textContent = "";
+    if(open){
+      if(!coverPad) coverPad = makePad(el("coverPad"));
+      coverPad.clear();
+      coverPad.onDone = tryPattern;
+    }
+
+    if(kind === "wait"){
+      sub.textContent = "비밀번호를 확인하고 있습니다…";
+      return;
+    }
+
+    el("why").textContent = "";
+
+    if(kind === "setup"){
+      el("pass1").value = ""; el("pass2").value = "";
+      sub.textContent = "이 일기장을 열 비밀번호를 정해 주세요. 기록은 이 비밀번호로 잠깁니다.";
+      el("pass2").hidden = false;
+      el("pass1").placeholder = "새 비밀번호 (4자 이상)";
+      el("pass1").autocomplete = "new-password";
+      el("enter").textContent = "일기장 만들기";
+      el("pass1").focus();
+    } else if(kind === "unlock"){
+      el("pass1").value = ""; el("pass2").value = "";
+      sub.textContent = "비밀번호를 넣으면 기록이 풀립니다.";
+      el("pass2").hidden = true;
+      el("pass1").placeholder = "비밀번호";
+      el("pass1").autocomplete = "current-password";
+      el("enter").textContent = "열기";
+      el("pass1").focus();
+        } else if(kind === "pattern"){
+      sub.textContent = hasPattern
+        ? "등록해 두신 잠금 패턴을 그려 주세요. 열리면 새 비밀번호를 정하시게 됩니다."
+        : "등록된 잠금 패턴이 없습니다. 아래에서 처음부터 다시 시작할 수 있습니다.";
+    }
+  }
+
+  function busy(on){
+    el("enter").disabled = on;
+    el("pass1").disabled = on;
+    el("pass2").disabled = on;
+  }
+
+  function submitGate(ev){
+    ev.preventDefault();
+    var pass = el("pass1").value;
+    if(!pass){ el("why").textContent = "비밀번호를 넣어 주세요"; return; }
+
+    if(!meta){
+      if(pass.length < 4){ el("why").textContent = "4자 이상으로 정해 주세요"; return; }
+      if(pass !== el("pass2").value){ el("why").textContent = "두 번 넣은 비밀번호가 다릅니다"; return; }
+      busy(true);
+      createVault(pass).then(function(){ busy(false); })
+        .catch(function(){ busy(false); el("why").textContent = "일기장을 만들지 못했습니다. 다시 시도해 주세요"; });
+      return;
+    }
+
+    busy(true);
+    openWithPass(pass).then(function(ok){
+      busy(false);
+      if(!ok){
+        el("why").textContent = "비밀번호가 맞지 않습니다";
+        el("pass1").value = ""; el("pass1").focus();
+      }
+    }).catch(function(){
+      busy(false); el("why").textContent = "여는 중 문제가 생겼습니다. 다시 시도해 주세요";
+    });
+  }
+
+  function tryPattern(seq){
+    if(!hasPattern){ el("patWhy").textContent = "등록된 패턴이 없습니다"; return; }
+    if(seq.length < MIN_DOTS){
+      el("patWhy").textContent = "점 " + MIN_DOTS + "개 이상 이어 주세요";
+      coverPad.clear();
+      return;
+    }
+    var box = (localBox() || {}).pattern;
+    var get = box ? Promise.resolve(box)
+                  : (db ? db.doc(PATTERN_PATH).get().then(function(x){ return x.exists ? x.data() : null; })
+                        : Promise.resolve(null));
+
+    el("patWhy").textContent = "확인 중…";
+    get.then(function(found){
+      if(!found || !found.wrap){
+        el("patWhy").textContent = "보관된 패턴이 없습니다";
+        return;
+      }
+      return unwrapMaster(patSecret(seq), found, ROUNDS_PAT).then(function(k){
+        master = k;
+        el("patWhy").textContent = "";
+        return enterApp().then(function(){
+          askNewPass("패턴으로 열었습니다. 이제 새 비밀번호를 정해 주세요.");
+        });
+      }).catch(function(){
+        el("patWhy").textContent = "패턴이 맞지 않습니다";
+        coverPad.clear();
+      });
+    }).catch(function(){
+      el("patWhy").textContent = "확인 중 문제가 생겼습니다";
+      coverPad.clear();
+    });
+  }
+
+  /* ---------------- 패턴 등록 ---------------- */
+  function openPatternSetup(firstTime){
+    if(!master) return;
+    if(!regPad) regPad = makePad(el("regPad"));
+    regPad.clear();
+    regPad.onDone = null;           // 등록은 ‘확인’을 눌러 마친다
+    el("regWhy").textContent = "";
+    el("regOff").hidden = firstTime || !hasPattern;
+    el("regCancel").hidden = firstTime;          // 첫 설정에서는 건너뛸 수 없다
+    el("patLead").textContent = firstTime
+      ? "마지막입니다. 점 " + MIN_DOTS + "개 이상을 이어 잠금 패턴을 그려 주세요. 비밀번호를 잊었을 때 여는 유일한 방법이므로 반드시 정해야 합니다."
+      : (hasPattern
+          ? "새 패턴을 그리면 이전 패턴은 쓸 수 없습니다."
+          : "점 " + MIN_DOTS + "개 이상을 이어 패턴을 그려 주세요. 비밀번호를 잊었을 때 이 패턴으로 열 수 있습니다.");
+    el("patOver").hidden = false;
+  }
+
+  function savePattern(){
+    var seq = regPad.get();
+    if(seq.length < MIN_DOTS){
+      el("regWhy").textContent = "점 " + MIN_DOTS + "개 이상 이어 주세요 (지금 " + seq.length + "개)";
+      return;
+    }
+    el("regGo").disabled = true;
+    storePattern(seq).then(function(){
+      el("regGo").disabled = false;
+      el("patOver").hidden = true;
+      say("잠금 패턴을 등록했습니다");
+    }).catch(function(){
+      el("regGo").disabled = false;
+      el("regWhy").textContent = "등록하지 못했습니다. 다시 시도해 주세요";
+    });
+  }
+
+  function createVault(pass){
+    return newMaster().then(function(k){
+      master = k;
+      return wrapMaster(pass);
+    }).then(function(box){
+      meta = box;
+      saveLocal({ meta: meta });
+      if(db) db.doc(META_PATH).set(meta).catch(function(){});
+      entries = carriedOver.slice();
+      carriedOver = [];
+      return enterApp().then(function(){
+        if(entries.length){
+          entries.forEach(persist);
+          say("이전 기록 " + entries.length + "편을 옮겼습니다");
+        }
+        openPatternSetup(true);   // 비밀번호를 정했으면 곧바로 패턴까지
+      });
+    });
+  }
+
+  function openWithPass(pass){
+    // 예전 방식(비밀번호에서 바로 열쇠를 만들던 시절)도 열어 준다
+    if(meta && meta.check && !meta.wrap){
+      return wrapper(pass, fromB64(meta.salt)).then(function(){
+        return legacyOpen(pass);
+      });
+    }
+    return unwrapMaster(pass, meta).then(function(k){
+      master = k;
+      return enterApp().then(function(){ return true; });
+    }).catch(function(){ master = null; return false; });
+  }
+
+  function legacyOpen(pass){
+    var salt = fromB64(meta.salt);
+    return subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"])
+      .then(function(base){
+        return subtle.deriveKey(
+          { name:"PBKDF2", salt: salt, iterations: ROUNDS, hash:"SHA-256" },
+          base, { name:"AES-GCM", length:256 }, true, ["encrypt","decrypt"]
+        );
+      })
+      .then(function(k){
+        master = k;
+        return unseal({ iv: meta.iv, cipher: meta.check });   // 맞는지 확인
+      })
+      .then(function(){
+        return wrapMaster(pass);       // 새 방식으로 갈아 둔다
+      })
+      .then(function(box){
+        meta = box;
+        saveLocal({ meta: meta });
+        if(db) db.doc(META_PATH).set(meta).catch(function(){});
+        return enterApp().then(function(){ return true; });
+      })
+      .catch(function(){ master = null; return false; });
+  }
+
+  /* ---------------- 비밀번호 바꾸기 ---------------- */
+  function askNewPass(reason){
+    el("passWhyOpen").textContent = reason ||
+      "새 비밀번호를 정하면 지금까지의 기록이 그 비밀번호로 다시 잠깁니다.";
+    el("newPass1").value = ""; el("newPass2").value = "";
+    el("pwhy").textContent = "";
+    el("passOver").hidden = false;
+    el("newPass1").focus();
+  }
+
+  function saveNewPass(){
+    var a = el("newPass1").value, b = el("newPass2").value;
+    if(a.length < 4){ el("pwhy").textContent = "4자 이상으로 정해 주세요"; return; }
+    if(a !== b){ el("pwhy").textContent = "두 번 넣은 비밀번호가 다릅니다"; return; }
+    el("passSave").disabled = true;
+    wrapMaster(a).then(function(box){
+      meta = box;
+      saveLocal({ meta: meta });
+      if(db) db.doc(META_PATH).set(meta).catch(function(){});
+      el("passSave").disabled = false;
+      el("passOver").hidden = true;
+      say("비밀번호를 바꿨습니다");
+    }).catch(function(){
+      el("passSave").disabled = false;
+      el("pwhy").textContent = "바꾸지 못했습니다. 다시 시도해 주세요";
+    });
+  }
+
+  /* ---------------- 열기·잠그기 ---------------- */
+  function enterApp(){
+    el("cover").hidden = true;
+    el("app").hidden = false;
+    resetIdle();
+
+    var box = localBox();
+    var first = (box && box.vault)
+      ? unseal(box.vault).then(function(list){ if(Array.isArray(list)) entries = list; })
+                         .catch(function(){})
+      : Promise.resolve();
+
+    return first.then(function(){
+      compose();
+      showView(entries.length ? "list" : "sheet");
+      if(db) watch();
+    });
+  }
+
+  function lock(){
+    if(mode === "edit") keep(true);
+    if(stopWatching){ stopWatching(); stopWatching = null; }
+    clearTimeout(saveTimer); clearTimeout(idleTimer);
+    entries = [];
+    master = null;
+    openId = null;
+    el("passOver").hidden = true;
+    el("patOver").hidden = true;
+    el("months").textContent = "";
+    el("heading").value = ""; el("page").value = "";
+    el("app").hidden = true;
+    el("cover").hidden = false;
+    coverMode("unlock");
+  }
+
+  function resetIdle(){
+    clearTimeout(idleTimer);
+    if(!master) return;
+    idleTimer = setTimeout(function(){
+      if(master){ lock(); el("why").textContent = "한동안 손을 놓으셔서 다시 잠갔습니다"; }
+    }, IDLE_MS);
+  }
+
+  function wipeAll(){
+    if(!confirm("지금까지의 기록을 모두 지우고 처음부터 새로 시작할까요?")) return;
+    if(!confirm("정말 지웁니다. 되돌릴 수 없습니다.")) return;
+
+    try { localStorage.removeItem(LOCAL_KEY); localStorage.removeItem(OLD_KEY); } catch(e){}
+
+    var done = Promise.resolve();
+    if(db){
+      done = db.collection("entries").get().then(function(snap){
+        return Promise.all(snap.docs.map(function(d){
+          return db.doc("entries/" + d.id).delete().catch(function(){});
+        }));
+      }).then(function(){
+        return Promise.all([
+          db.doc(META_PATH).delete().catch(function(){}),
+          db.doc(PATTERN_PATH).delete().catch(function(){})
+        ]);
+      }).catch(function(){});
+    }
+    done.then(function(){
+      meta = null; master = null; entries = []; carriedOver = [];
+      hasPattern = false;
+      coverMode("setup");
+      el("why").textContent = "모두 지웠습니다. 새 비밀번호를 정해 주세요";
+    });
+  }
+
+  /* ---------------- 예시 ---------------- */
+  function sample(){
+    return {
+      id: "__sample__",
+      when: iso(new Date()),
+      time: hhmm(new Date()),
+      feel: "🙂",
+      heading: "첫 기록을 남기기 전에",
+      page: "이건 앱이 어떻게 보이는지 알려주는 예시입니다.\n\n" +
+            "위쪽 ‘새 글’을 누르면 빈 종이가 열립니다. 제목과 내용을 적고 저장하면\n" +
+            "왼쪽 목록에 날짜·시간순으로 쌓입니다.\n\n" +
+            "지난 글은 ‘읽기 전용’으로 열려서 실수로 고쳐지지 않습니다. 고치려면\n" +
+            "아래 ‘수정’을, 다 봤으면 ‘닫기’를 누르세요.\n\n" +
+            "비밀번호를 잊으면 표지에서 ‘비밀번호를 잊었습니다’를 눌러 잠금 패턴으로\n" +
+            "열 수 있습니다. 위쪽 ‘패턴’ 버튼에서 바꿀 수 있습니다.\n\n" +
+            "이 예시는 첫 기록을 저장하는 순간 사라집니다.",
+      edited: 0,
+      isSample: true
+    };
+  }
+
+  /* ---------------- 모드 ---------------- */
+  function setMode(next){
+    mode = next;
+    var ro = (next === "read");
+
+    el("heading").readOnly = ro;
+    el("page").readOnly = ro;
+    el("when").disabled = ro;
+    el("clock").disabled = ro;
+    el("feel").disabled = ro;
+    document.body.classList.toggle("locked", ro);
+    el("lockmark").hidden = !ro;
+
+    el("keep").hidden   = ro;
+    el("amend").hidden  = (next !== "read");
+    el("revert").hidden = (next !== "edit");
+    el("close").hidden  = (next === "new");
+    el("drop").hidden   = (next !== "read");
+  }
+
+  function fill(e){
+    el("when").value = e.when;
+    el("clock").value = clockOf(e);
+    el("feel").value = e.feel || "";
+    el("heading").value = e.heading;
+    el("page").value = e.page;
+  }
+
+  function find(id){
+    for(var i = 0; i < entries.length; i++) if(entries[i].id === id) return entries[i];
+    return id === "__sample__" ? sample() : null;
+  }
+
+  /* ---------------- 편집 흐름 ---------------- */
+  function compose(){
+    clearTimeout(saveTimer);
+    openId = null;
+    el("when").value = iso(new Date());
+    el("clock").value = hhmm(new Date());
+    el("feel").value = "";
+    el("heading").value = "";
+    el("page").value = "";
+    setMode("new");
+    paint();
+  }
+
+  function reveal(id){
+    var e = find(id);
+    if(!e) return;
+    clearTimeout(saveTimer);
+    openId = id;
+    fill(e);
+    setMode("read");
+    paint();
+  }
+
+  function amend(){
+    if(mode !== "read") return;
+    setMode("edit");
+    el("heading").focus();
+    say("이제 고칠 수 있습니다");
+  }
+
+  function revert(){
+    var e = find(openId);
+    if(!e){ compose(); return; }
+    clearTimeout(saveTimer);
+    fill(e);
+    setMode("read");
+    paint();
+    say("고치기를 취소했습니다");
+  }
+
+  function keep(quiet){
+    if(mode === "read" || !master) return;
+
+    var heading = el("heading").value.trim();
+    var page = el("page").value.trim();
+    if(!heading && !page){
+      if(!quiet) say("내용을 먼저 적어 주세요", true);
+      return;
+    }
+
+    var e = openId ? find(openId) : null;
+    if(!e || e.isSample){
+      e = { id: String(Date.now()) + Math.random().toString(36).slice(2,6) };
+      entries.push(e);
+      openId = e.id;
+    }
+    e.when = el("when").value || iso(new Date());
+    e.time = el("clock").value || hhmm(new Date());
+    e.feel = el("feel").value;
+    e.heading = heading || "무제";
+    e.page = page;
+    e.edited = Date.now();
+
+    persist(e);
+
+    if(quiet){
+      paint();
+      say("자동 저장됨");
+    } else {
+      setMode("read");
+      paint();
+      say("저장했습니다");
+    }
+  }
+
+  function drop(){
+    if(!openId || openId === "__sample__"){ compose(); return; }
+    var e = find(openId);
+    if(!e) return;
+    if(!confirm("‘" + e.heading + "’을(를) 지울까요? 되돌릴 수 없습니다.")) return;
+    var id = e.id;
+    entries = entries.filter(function(x){ return x.id !== id; });
+    forget(id);
+    compose();
+    say("지웠습니다");
+  }
+
+  /* ---------------- 목록 ---------------- */
+  function paint(){
+    el("weekday").textContent = weekdayOf(el("when").value);
+    el("tally").textContent = entries.length ? entries.length + "편" : "";
+
+    var q = el("find").value.trim().toLowerCase();
+    var pool = entries.length ? entries : [sample()];
+    var shown = pool.filter(function(e){
+      return !q || (e.heading + " " + e.page).toLowerCase().indexOf(q) !== -1;
+    }).sort(function(a, b){
+      if(a.when !== b.when) return a.when < b.when ? 1 : -1;
+      var ta = clockOf(a), tb = clockOf(b);
+      if(ta !== tb) return ta < tb ? 1 : -1;
+      return b.edited - a.edited;
+    });
+
+    var months = el("months");
+    months.textContent = "";
+
+    if(!shown.length){
+      var none = document.createElement("p");
+      none.className = "none";
+      none.textContent = "‘" + el("find").value.trim() + "’과 맞는 기록이 없습니다.";
+      months.appendChild(none);
+      return;
+    }
+
+    var group = null, label = null;
+    shown.forEach(function(e){
+      var key = e.when.slice(0, 7);
+      if(key !== label){
+        label = key;
+        group = document.createElement("section");
+        group.className = "month";
+        var h = document.createElement("h2");
+        var p = key.split("-");
+        h.textContent = p[0] + "년 " + (+p[1]) + "월";
+        group.appendChild(h);
+        months.appendChild(group);
+      }
+      group.appendChild(rowFor(e));
+    });
+  }
+
+  function rowFor(e){
+    var row = document.createElement("button");
+    row.type = "button";
+    row.className = "row" + (e.isSample ? " sample" : "");
+    if(e.id === openId) row.setAttribute("aria-current", "true");
+
+    var day = document.createElement("span");
+    day.className = "day";
+    day.textContent = e.when.slice(8);
+
+    var cap = document.createElement("span");
+    cap.className = "cap";
+    var b = document.createElement("b");
+    b.textContent = (e.feel ? e.feel + " " : "") + e.heading;
+
+    var s = document.createElement("span");
+    var clock = clockOf(e);
+    if(clock){
+      var t = document.createElement("i");
+      t.className = "at";
+      t.textContent = clock;
+      s.appendChild(t);
+    }
+    s.appendChild(document.createTextNode(
+      e.page.replace(/\s+/g, " ").slice(0, 34) || "내용 없음"));
+
+    cap.appendChild(b);
+    cap.appendChild(s);
+    row.appendChild(day);
+    row.appendChild(cap);
+    row.addEventListener("click", function(){
+      if(mode === "edit" && e.id !== openId &&
+         !confirm("고치던 내용을 저장하지 않고 다른 기록을 열까요?")) return;
+      reveal(e.id);
+      if(isNarrow()) showView("sheet");
+    });
+    return row;
+  }
+
+  /* ---------------- 내보내기 ---------------- */
+  // Claude 안에서는 저장 능력을, 배포판에서는 브라우저 내려받기를 쓴다
+  function offerFile(filename, text){
+    if(saveFile) return saveFile.save({ filename: filename, data: text });
+    return new Promise(function(done, fail){
+      try {
+        var blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+        done({ status: "saved" });
+      } catch(e){
+        fail({ code: "unavailable" });
+      }
+    });
+  }
+
+  function exportAll(){
+    if(!entries.length){ say("내보낼 기록이 없습니다", true); return; }
+    var text = entries.slice().sort(function(a, b){
+      if(a.when !== b.when) return a.when < b.when ? -1 : 1;
+      var ta = clockOf(a), tb = clockOf(b);
+      if(ta !== tb) return ta < tb ? -1 : 1;
+      return a.edited - b.edited;
+    }).map(function(e){
+      var clock = clockOf(e);
+      return e.when + " " + weekdayOf(e.when) + (clock ? " " + clock : "") +
+             (e.feel ? " " + e.feel : "") +
+             "\n" + e.heading + "\n\n" + e.page + "\n\n" +
+             "────────────────────\n";
+    }).join("\n");
+
+    offerFile("오늘의기록-" + iso(new Date()) + ".txt", text)
+      .then(function(){ say("내려받았습니다 — 이 파일은 잠기지 않으니 잘 보관하세요"); })
+      .catch(function(err){
+        var code = err && err.code;
+        if(code === "declined") return;
+        if(code === "rate_limited"){ say("잠시 후 다시 눌러 주세요", true); return; }
+        say("내보내기에 실패했습니다", true);
+      });
+  }
+
+  /* ---------------- 서버 저장소 ---------------- */
+  function watch(){
+    if(!db || stopWatching) return;
+    stopWatching = db.collection("entries").onSnapshot(function(snap){
+      Promise.all(snap.docs.map(function(d){
+        var v = d.data() || {};
+        if(!v.cipher) return null;
+        return unseal(v).then(function(body){
+          return {
+            id: d.id,
+            when: typeof body.when === "string" ? body.when : iso(new Date()),
+            time: typeof body.time === "string" ? body.time : "",
+            feel: typeof body.feel === "string" ? body.feel : "",
+            heading: typeof body.heading === "string" ? body.heading : "무제",
+            page: typeof body.page === "string" ? body.page : "",
+            edited: typeof body.edited === "number" ? body.edited : 0
+          };
+        }).catch(function(){ return null; });
+      })).then(function(list){
+        var fresh = list.filter(Boolean);
+        if(!fresh.length && entries.length) return;
+        entries = fresh;
+        mirror();
+        if(openId && !find(openId)) compose();
+        else if(mode === "read" && openId){ fill(find(openId)); paint(); }
+        else paint();
+      });
+    }, function(err){
+      stopWatching = null;
+      db = null;
+      say(dbTrouble(err), true);
+    });
+  }
+
+  /* ---------------- 시작 ---------------- */
+  function boot(){
+    if(!subtle){
+      el("coverSub").textContent =
+        "이 브라우저에서는 잠금 기능을 쓸 수 없습니다. 최신 브라우저에서 열어 주세요.";
+      el("waiting").hidden = true;
+      return;
+    }
+
+    carriedOver = oldPlainEntries();
+
+    var box = localBox();
+    if(box && box.pattern) hasPattern = true;
+    if(box && box.meta){
+      meta = box.meta;
+      coverMode("unlock");
+    } else {
+      coverMode("wait");
+    }
+
+    if(window.claude && typeof window.claude.use === "function"){
+      window.claude.use("db").then(function(store){
+        if(!store){ if(!meta) coverMode("setup"); return; }
+        db = store;
+        return Promise.all([
+          db.doc(META_PATH).get().catch(function(){ return { exists:false }; }),
+          db.doc(PATTERN_PATH).get().catch(function(){ return { exists:false }; })
+        ]).then(function(pair){
+          if(pair[1].exists){
+            var q = pair[1].data();
+            if(q && q.wrap){ hasPattern = true; saveLocal({ pattern: q }); }
+          }
+          if(pair[0].exists){
+            var v = pair[0].data();
+            if(v && v.salt && v.iv && (v.wrap || v.check)){
+              meta = v;
+              saveLocal({ meta: meta });
+              if(!master) coverMode("unlock");
+              return;
+            }
+          }
+          if(!meta && !master) coverMode("setup");
+        });
+      }).catch(function(){
+        if(!meta && !master) coverMode("setup");
+      });
+
+      window.claude.use("downloads").then(function(downloads){
+        if(!downloads) return;
+        saveFile = downloads;
+      }).catch(function(){});
+    } else if(!meta){
+      coverMode("setup");
+    }
+  }
+
+  /* ---------------- 연결 ---------------- */
+  el("gate").addEventListener("submit", submitGate);
+  el("forgot").addEventListener("click", function(){ coverMode("pattern"); });
+  el("backToPass").addEventListener("click", function(){ coverMode("unlock"); });
+  el("padClear").addEventListener("click", function(){
+    if(coverPad) coverPad.clear();
+    el("patWhy").textContent = "";
+  });
+  el("padGo").addEventListener("click", function(){
+    if(coverPad) tryPattern(coverPad.get());
+  });
+
+  el("regClear").addEventListener("click", function(){
+    if(regPad) regPad.clear();
+    el("regWhy").textContent = "";
+  });
+  el("regGo").addEventListener("click", savePattern);
+  el("regCancel").addEventListener("click", function(){ el("patOver").hidden = true; });
+  el("regOff").addEventListener("click", function(){
+    if(!confirm("잠금 패턴을 없앨까요?\n\n비밀번호를 잊으면 기록을 되살릴 방법이 전혀 없습니다.")) return;
+    dropPattern();
+    el("patOver").hidden = true;
+    say("잠금 패턴을 없앴습니다");
+  });
+  el("patBtn").addEventListener("click", function(){ openPatternSetup(false); });
+  el("wipe").addEventListener("click", wipeAll);
+
+
+  el("passSave").addEventListener("click", saveNewPass);
+  el("passCancel").addEventListener("click", function(){ el("passOver").hidden = true; });
+
+  el("passBtn").addEventListener("click", function(){ if(master) askNewPass(); });
+  el("lockNow").addEventListener("click", lock);
+  el("export").addEventListener("click", exportAll);
+  el("viewList").addEventListener("click", function(){ showView("list"); });
+  el("viewSheet").addEventListener("click", function(){ showView("sheet"); });
+
+  el("compose").addEventListener("click", function(){
+    if(mode === "edit" && !confirm("고치던 내용을 저장하지 않고 새 글을 쓸까요?")) return;
+    compose();
+    showView("sheet");
+    el("heading").focus();
+  });
+  el("keep").addEventListener("click", function(){ keep(false); });
+  el("amend").addEventListener("click", amend);
+  el("revert").addEventListener("click", revert);
+  el("close").addEventListener("click", function(){
+    if(mode === "edit" && !confirm("고치던 내용을 저장하지 않고 닫을까요?")) return;
+    compose();
+    if(isNarrow()) showView("list");
+  });
+  el("drop").addEventListener("click", drop);
+  el("find").addEventListener("input", paint);
+  el("when").addEventListener("input", function(){
+    el("weekday").textContent = weekdayOf(el("when").value);
+  });
+
+  ["heading","page","when","clock","feel"].forEach(function(id){
+    el(id).addEventListener("input", function(){
+      if(mode === "read") return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function(){ keep(true); }, 1500);
+    });
+  });
+
+  ["click","keydown","input"].forEach(function(kind){
+    el("app").addEventListener(kind, resetIdle, true);
+  });
+
+  document.addEventListener("keydown", function(ev){
+    if(!el("passOver").hidden || !el("patOver").hidden) return;
+    if(el("app").hidden) return;
+    if((ev.metaKey || ev.ctrlKey) && ev.key === "s"){
+      ev.preventDefault();
+      if(mode === "read"){ amend(); return; }
+      clearTimeout(saveTimer);
+      keep(false);
+    }
+    if(ev.key === "Escape" && mode === "read") compose();
+  });
+
+  boot();
+})();
+</script>
+
+<script>
+/* 껍데기를 담아 두어 인터넷 없이도, 홈 화면에서도 열리게 한다 */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("./sw.js").catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
