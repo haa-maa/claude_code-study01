@@ -1,0 +1,9 @@
+/*
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex, nofollow
+/sw.js
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
